@@ -29,12 +29,14 @@ City Info
 </form>
 
 <?php
+
 if(isset($_POST["city"]))
 {
 	$connection= pg_connect("host=dbclass.cs.pdx.edu user=s19wdb31 dbname=s19wdb31 password=Alexdbcla$$");
 
 
-	echo "<h1>Weather Data for " . $_POST["city"] . "</h1>";
+	echo "<h2>Weather Data for " . $_POST["city"] . "</h2>";
+	echo "<br>";
 
 	$maxTempQuery = "SELECT temp_max, TO_CHAR(weather_date, 'Month DD, YYYY')
 	    FROM CityInfo.Location NATURAL JOIN CityInfo.Weather
@@ -57,10 +59,8 @@ if(isset($_POST["city"]))
 	foreach($maxDates as &$date){
 		echo $date . " ";
 	}
-	echo ".  It was " . $maxTemp . "°F on these day(s).<br>";
+	echo ".  It reached a high temperature of " . $maxTemp . "°F on these day(s).<br><br>";
 	pg_free_result($result);
-
-	echo "<br>";
 
 	//MIN TEMP QUERY
 	$minTempQuery = "SELECT temp_min, TO_CHAR(weather_date, 'Month DD, YYYY')
@@ -84,22 +84,322 @@ if(isset($_POST["city"]))
 	foreach($minDates as &$date){
 		echo $date . " ";
 	}
-	echo ".  It was " . $minTemp . "°F on these day(s).<br>";
+	echo ".  It reached a low temperature of " . $minTemp . "°F on these day(s).<br><br>";
 
-
-
-
-	//AIR QUALITY
-	echo "<h1>Air Quality Data for " . $_POST["city"] . "</h1>";
-
-	$maxPMQuery = "SELECT Measurement, TO_CHAR(airquality_date, 'Month DD, YYYY')
-		         FROM CityInfo.AirQuality NATURAL JOIN CityInfo.Weather
-			WHERE city = '" . $_POST["city"] . "'
-			  AND pollutant = 'PM2.5'
-			  AND Measurement = 
 
 	pg_free_result($result);
-	pg_close($connection);
+
+	//MONTHLY WEATHER
+
+	$hottestMonthQuery = 
+		"SELECT EXTRACT(Year from weather_date), 
+		EXTRACT(Month from weather_date), 
+		AVG(temp_max)
+		FROM CityInfo.Weather NATURAL JOIN CityInfo.Location
+		WHERE city = '" . $_POST["city"] . "'
+		GROUP BY EXTRACT(Year from weather_date), 
+		EXTRACT(Month from weather_date)
+		HAVING AVG(temp_max) = (SELECT MAX(avg_monthly_high) 
+		FROM (SELECT AVG(b.temp_max) avg_monthly_high
+		FROM CityInfo.Weather b NATURAL JOIN CityInfo.Location
+		WHERE city = '" . $_POST["city"] ."' 
+		GROUP BY EXTRACT(Year from b.weather_date), 
+		EXTRACT(Month from b.weather_date)) c)";
+
+	$result= pg_query($connection, $hottestMonthQuery);
+	$numrows = pg_num_rows($result);
+	$hotMonths = array();
+	$hotYears = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+		$hotYears[$i] = $row[0];	
+		$hotMonths[$i] = $row[1];
+		$hotTemp = $row[2];
+		$i = $i + 1;
+	}
+	echo "The hottest month was ";
+
+	for($j = 0; $j < $i; $j = $j + 1){
+		echo date('M', mktime(0, 0, 0, $hotMonths[$j])).  " " . $hotYears[$j] . " ";
+	}
+	echo ".  The average high temperature was " . round($hotTemp, 2) . "°F during this month.<br><br>";
+
+	pg_free_result($result);
+
+	//Coldest month
+
+	$coldestMonthQuery = 
+ 	  "SELECT EXTRACT(Year from weather_date), 
+		  EXTRACT(Month from weather_date), 
+		  AVG(temp_max)
+	          FROM CityInfo.Weather NATURAL JOIN CityInfo.Location
+	    WHERE city = '" . $_POST["city"] . "'
+         GROUP BY EXTRACT(Year from weather_date), 
+                  EXTRACT(Month from weather_date)
+           HAVING AVG(temp_max) = (SELECT MIN(avg_monthly_high) 
+                                     FROM (SELECT AVG(b.temp_max) avg_monthly_high
+                                             FROM CityInfo.Weather b NATURAL JOIN CityInfo.Location
+                                            WHERE city = '" . $_POST["city"] ."' 
+					 GROUP BY EXTRACT(Year from b.weather_date), 
+                                                  EXTRACT(Month from b.weather_date)) c)";
+ 
+	$result= pg_query($connection, $coldestMonthQuery);
+	$numrows = pg_num_rows($result);
+	$coldMonths = array();
+	$coldYears = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+	        $coldYears[$i] = $row[0];	
+		$coldMonths[$i] = $row[1];
+		$coldTemp = $row[2];
+		$i = $i + 1;
+	}
+	echo "The coldest month was ";
+
+	for($j = 0; $j < $i; $j = $j + 1){
+		echo date('M', mktime(0, 0, 0, $coldMonths[$j])).  " " . $coldYears[$j] . " ";
+	}
+	echo ".  The average high temperature was " . round($coldTemp, 2) . "°F during this month.<br><br>";
+
+	pg_free_result($result);
+
+	//AIR QUALITY
+
+	echo "<h2>Air Quality Data for " . $_POST["city"] . "</h2>";
+	echo "<br>";
+
+	$highestPMQuery =
+		"SELECT airquality_date,
+		        measurement
+		   FROM CityInfo.AirQuality NATURAL JOIN CityInfo.Location
+		  WHERE city = '" . $_POST["city"] . "'
+                    AND pollutant = 'PM2.5'
+                    AND measurement = (SELECT MAX(b.measurement)
+                                         FROM CityInfo.AirQuality b NATURAL JOIN CityInfo.Location
+					WHERE city = '" . $_POST["city"] . "'
+                                          AND POLLUTANT = 'PM2.5');";
+
+	$result= pg_query($connection, $highestPMQuery);
+	$numrows = pg_num_rows($result);
+	$maxDates = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+
+	$maxPMDates[$i] = $row[0];
+	$maxPM = $row[1];
+	$i = $i + 1;
+	}
+	echo "The day(s) with the highest recorded level of PM2.5 were ";
+
+	foreach($maxPMDates as &$date){
+		echo $date . " ";
+	}
+	echo "The recorded level of PM2.5 was " . $maxPM . "μg/m³ on these day(s).<br><br>";
+        pg_free_result($result);
+
+	$highestPMMonthQuery = 
+		"SELECT EXTRACT(Year from airquality_date), 
+		EXTRACT(Month from airquality_date), 
+		AVG(measurement)
+		FROM CityInfo.AirQuality NATURAL JOIN CityInfo.Location
+		WHERE city = '" . $_POST["city"] . "'
+                AND pollutant = 'PM2.5'
+		GROUP BY EXTRACT(Year from airquality_date), 
+		EXTRACT(Month from airquality_date)
+		HAVING AVG(measurement) = (SELECT MAX(avg_monthly_measurement) 
+		FROM (SELECT AVG(b.measurement) avg_monthly_measurement
+		FROM CityInfo.AirQuality b NATURAL JOIN CityInfo.Location
+		WHERE city = '" . $_POST["city"] ."' 
+                AND pollutant = 'PM2.5'
+		GROUP BY EXTRACT(Year from b.airquality_date), 
+		EXTRACT(Month from b.airquality_date)) c)";
+
+	$result= pg_query($connection, $highestPMMonthQuery);
+	$numrows = pg_num_rows($result);
+	$highPMMonths = array();
+	$highPMYears = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+		$highPMYears[$i] = $row[0];	
+		$highPMMonths[$i] = $row[1];
+		$highPM = $row[2];
+		$i = $i + 1;
+	}
+	echo "The month with the highest average recorded level of PM2.5 was  ";
+
+	for($j = 0; $j < $i; $j = $j + 1){
+		echo date('M', mktime(0, 0, 0, $highPMMonths[$j])).  " " . $highPMYears[$j] . " ";
+	}
+	echo ".  The average level of PM2.5 was " . round($highPM, 2) . "μg/m³ during this month.<br><br>";
+
+	pg_free_result($result);
+
+	$highestOzoneQuery =
+		"SELECT airquality_date,
+		        measurement
+		   FROM CityInfo.AirQuality NATURAL JOIN CityInfo.Location
+		  WHERE city = '" . $_POST["city"] . "'
+                    AND pollutant = 'Ozone'
+                    AND measurement = (SELECT MAX(b.measurement)
+                                         FROM CityInfo.AirQuality b NATURAL JOIN CityInfo.Location
+					WHERE city = '" . $_POST["city"] . "'
+                                          AND POLLUTANT = 'Ozone');";
+
+	$result= pg_query($connection, $highestOzoneQuery);
+	$numrows = pg_num_rows($result);
+	$maxDates = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+
+	$maxOzoneDates[$i] = $row[0];
+	$maxOzone = $row[1];
+	$i = $i + 1;
+	}
+	echo "The day(s) with the highest recorded level of Ozone were ";
+
+	foreach($maxOzoneDates as &$date){
+		echo $date . " ";
+	}
+	echo "The recorded level of Ozone was " . $maxOzone . "ppm on these day(s).<br><br>";
+        pg_free_result($result);
+
+	$highestOzoneMonthQuery = 
+		"SELECT EXTRACT(Year from airquality_date), 
+		EXTRACT(Month from airquality_date), 
+		AVG(measurement)
+		FROM CityInfo.AirQuality NATURAL JOIN CityInfo.Location
+		WHERE city = '" . $_POST["city"] . "'
+                AND pollutant = 'Ozone'
+		GROUP BY EXTRACT(Year from airquality_date), 
+		EXTRACT(Month from airquality_date)
+		HAVING AVG(measurement) = (SELECT MAX(avg_monthly_measurement) 
+		FROM (SELECT AVG(b.measurement) avg_monthly_measurement
+		FROM CityInfo.AirQuality b NATURAL JOIN CityInfo.Location
+		WHERE city = '" . $_POST["city"] ."' 
+                AND pollutant = 'Ozone'
+		GROUP BY EXTRACT(Year from b.airquality_date), 
+		EXTRACT(Month from b.airquality_date)) c)";
+
+	$result= pg_query($connection, $highestOzoneMonthQuery);
+	$numrows = pg_num_rows($result);
+	$highOzoneMonths = array();
+	$highOzoneYears = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+		$highOzoneYears[$i] = $row[0];	
+		$highOzoneMonths[$i] = $row[1];
+		$highOzone = $row[2];
+		$i = $i + 1;
+	}
+	echo "The month with the highest average recorded level of Ozone was  ";
+
+	for($j = 0; $j < $i; $j = $j + 1){
+		echo date('M', mktime(0, 0, 0, $highOzoneMonths[$j])).  " " . $highOzoneYears[$j] . " ";
+	}
+	echo ".  The average level of Ozone was " . round($highOzone, 2) . "ppm during this month.<br><br>";
+
+	pg_free_result($result);
+
+	//Crime Data
+	
+	echo "<h2>Crime Data for " . $_POST["city"] . " from 2010-2017</h2>";
+	echo "<br>";
+
+	$yearlyAvgCrimeQuery = 
+		"SELECT AVG(violent_crimes), AVG(property_crimes)
+		   FROM CityInfo.Crime NATURAL JOIN CityInfo.Location
+		  WHERE city = '" . $_POST["city"] . "';";
+
+
+        $result = pg_query($connection, $yearlyAvgCrimeQuery);
+        $resultRow = pg_fetch_row($result);
+
+	$yearlyAvgViolent = $resultRow[0];
+	$yearlyAvgProperty = $resultRow[1];
+
+	echo "The average number of violent crimes is " . round($yearlyAvgViolent) . " per year.<br>";
+
+	echo "The average number of property crimes is " . round($yearlyAvgProperty) . " per year.<br><br>";
+
+	pg_free_result($result);
+
+	//Home Price Data
+
+	echo "<h2>Home Price Data for " . $_POST["city"] . " from 2010-2018</h2>";
+	echo "<br>";
+
+	$homePriceQuery =
+		"SELECT ten.avg_price,
+		        eighteen.avg_price,
+		        eighteen.avg_price - ten.avg_price diff
+		   FROM CityInfo.HomePrice ten, 
+                        CityInfo.HomePrice eighteen,
+                        CityInfo.Location 
+		  WHERE ten.loc_id = location.loc_id
+                    AND eighteen.loc_id = location.loc_id 
+                    AND city = '" . $_POST["city"] . "'
+                    AND ten.year = '2010'
+                    AND eighteen.year = '2018';";
+
+        $result = pg_query($connection, $homePriceQuery);
+
+	$resultRow = pg_fetch_row($result);
+
+	$tenAvgPrice = $resultRow[0];
+	$eighteenAvgPrice = $resultRow[1];
+	$priceDiff = $resultRow[2];
+	$avgYearlyChange = $priceDiff / 8;
+
+	echo "The average home price in 2010 was $" . $tenAvgPrice . "<br>";
+	echo "The average home price in 2018 was $" . $eighteenAvgPrice . "<br>";
+	echo "On average, home prices ";
+	if($priceDiff > 0)
+		echo "increased by ";
+	else
+		echo "decreased by ";
+	echo "$" . $avgYearlyChange . " per year.<br>";
+
+	pg_free_result($result);
+
+	//Population data
+	
+	echo "<h2>Population data for " . $_POST["city"] . " from 2010-2017</h2>";
+	echo "<br>";
+
+	$populationQuery =
+		"SELECT ten.population,
+		        seventeen.population,
+		        seventeen.population - ten.population diff
+		   FROM CityInfo.CityPopulation ten, 
+                        CityInfo.CityPopulation seventeen,
+                        CityInfo.Location 
+		  WHERE ten.loc_id = location.loc_id
+                    AND seventeen.loc_id = location.loc_id 
+                    AND city = '" . $_POST["city"] . "'
+                    AND ten.year = '2010'
+                    AND seventeen.year = '2017';";
+
+        $result = pg_query($connection, $populationQuery);
+
+	$resultRow = pg_fetch_row($result);
+
+	$tenPop = $resultRow[0];
+	$seventeenPop = $resultRow[1];
+	$popDiff = $resultRow[2];
+	$avgYearlyChange = $popDiff / 7;
+
+	echo "The population in 2010 was " . $tenPop . "<br>";
+	echo "The population in 2017 was " . $seventeenPop . "<br>";
+	echo "On average, the population ";
+	if($priceDiff > 0)
+		echo "increased by ";
+	else
+		echo "decreased by ";
+	echo round($avgYearlyChange) . " per year.";
+
+
+	pg_free_result($result);
+ 	pg_close($connection);
 }
 ?>
   </body>
