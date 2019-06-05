@@ -169,7 +169,7 @@ if(isset($_POST["city"]))
 	echo "<br>";
 
 	$highestPMQuery =
-		"SELECT airquality_date,
+		"SELECT TO_CHAR(airquality_date, 'Month DD, YYYY'),
 		        measurement
 		   FROM CityInfo.AirQuality NATURAL JOIN CityInfo.Location
 		  WHERE city = '" . $_POST["city"] . "'
@@ -235,7 +235,7 @@ if(isset($_POST["city"]))
 	pg_free_result($result);
 
 	$highestOzoneQuery =
-		"SELECT airquality_date,
+		"SELECT TO_CHAR(airquality_date),
 		        measurement
 		   FROM CityInfo.AirQuality NATURAL JOIN CityInfo.Location
 		  WHERE city = '" . $_POST["city"] . "'
@@ -397,9 +397,132 @@ if(isset($_POST["city"]))
 		echo "decreased by ";
 	echo round($avgYearlyChange) . " per year.";
 
+	pg_free_result($result);
+
+	echo "<h2>Places of Interest in or near " . $_POST["city"] . "</h2>";
+
+	echo "<h3>Natural Attractions</h3>";
+
+	$natAttQuery =
+		"SELECT PlaceOfInterest.name,
+		        distance,
+			description
+		   FROM CityInfo.PlaceOfInterest, 
+			CityInfo.NaturalAttraction,
+                        CityInfo.Location
+                  WHERE PlaceOfInterest.loc_id = NaturalAttraction.loc_id
+                    AND PlaceOfInterest.name = NaturalAttraction.name
+                    AND PlaceOfInterest.loc_id = Location.loc_id
+                    AND city = '" . $_POST["city"] . "';"; 
+         
+	$result= pg_query($connection, $natAttQuery);
+	$numrows = pg_num_rows($result);
+	$names = array();
+	$distances = array();
+	$descriptions = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+                $names[$i] = $row[0];
+		$distances[$i] = $row[1];
+		$descriptions[$i] = $row[2];
+		
+		$i = $i + 1;
+	}
+
+	for($j = 0; $j < $i; $j = $j + 1)
+	{
+		echo "<b>" . $names[$j] . "</b> : ";
+
+		if($distances[$j] == 0)
+			echo "Within the city of " . $_POST["city"];
+		else
+		{
+			echo $distances[$j] . " miles from " . $_POST["city"];
+		}
+		echo "<br>";
+		echo $descriptions[$j];
+		echo "<br>";
+	}
+
+	echo "<h3>Colleges</h3>";
+
+	$universityQuery =
+		"SELECT PlaceOfInterest.name,
+			enrollment,
+			acceptance_rate
+		   FROM CityInfo.PlaceOfInterest, 
+			CityInfo.University,
+                        CityInfo.Location
+                  WHERE PlaceOfInterest.loc_id = University.loc_id
+                    AND PlaceOfInterest.name = University.name
+                    AND PlaceOfInterest.loc_id = Location.loc_id
+                    AND city = '" . $_POST["city"] . "';"; 
+         
+	$result= pg_query($connection, $universityQuery);
+	$numrows = pg_num_rows($result);
+	$names = array();
+	$enrollments = array();
+	$acceptances = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+                $names[$i] = $row[0];
+		$enrollments[$i] = $row[1];
+		$acceptances[$i] = $row[2];
+		
+		$i = $i + 1;
+	}
+
+	for($j = 0; $j < $i; $j = $j + 1)
+	{
+		echo "<b>" . $names[$j] . "</b> : has an enrollment of " . $enrollments[$j] . " and an acceptance rate of " . $acceptances[$j] . "%";
+
+		echo "<br>";
+	}
+
+	echo "<h3>Hotels</h3>";
+
+	$hotelsQuery =
+		"SELECT PlaceOfInterest.name,
+		        distance,
+			stars
+		   FROM CityInfo.PlaceOfInterest, 
+			CityInfo.Hotel,
+                        CityInfo.Location
+                  WHERE PlaceOfInterest.loc_id = Hotel.loc_id
+                    AND PlaceOfInterest.name = Hotel.name
+                    AND PlaceOfInterest.loc_id = Location.loc_id
+                    AND city = '" . $_POST["city"] . "';"; 
+         
+	$result= pg_query($connection, $hotelsQuery);
+	$numrows = pg_num_rows($result);
+	$names = array();
+	$distances = array();
+	$stars = array();
+	$i = 0;
+	while ($row = pg_fetch_row($result)) {
+                $names[$i] = $row[0];
+		$distances[$i] = $row[1];
+		$stars[$i] = $row[2];
+		
+		$i = $i + 1;
+	}
+
+	for($j = 0; $j < $i; $j = $j + 1)
+	{
+		echo "<b>" . $names[$j] . "</b> : A " . $stars[$j] . " star hotel ";
+
+		if(distances[$j] == 0)
+			echo "within the city of " . $_POST["city"];
+		else
+			echo $distances[$j] . " miles from " . $_POST["city"];
+			
+		echo "<br>";
+	}
 
 	pg_free_result($result);
  	pg_close($connection);
+
+
 }
 ?>
   </body>
