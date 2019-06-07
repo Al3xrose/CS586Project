@@ -35,7 +35,7 @@ if(isset($_POST["city"]))
 	$connection= pg_connect("host=dbclass.cs.pdx.edu user=s19wdb31 dbname=s19wdb31 password=Alexdbcla$$");
 
 
-	echo "<h2>Weather Data for " . $_POST["city"] . "</h2>";
+	echo "<h2>Weather Data for " . $_POST["city"] . " from 2004-2018</h2>";
 	echo "<br>";
 
 	$maxTempQuery = "SELECT temp_max, TO_CHAR(weather_date, 'Month DD, YYYY')
@@ -165,7 +165,7 @@ if(isset($_POST["city"]))
 
 	//AIR QUALITY
 
-	echo "<h2>Air Quality Data for " . $_POST["city"] . "</h2>";
+	echo "<h2>Air Quality Data for " . $_POST["city"] . " from 2010-2018</h2>";
 	echo "<br>";
 
 	$highestPMQuery =
@@ -235,7 +235,7 @@ if(isset($_POST["city"]))
 	pg_free_result($result);
 
 	$highestOzoneQuery =
-		"SELECT TO_CHAR(airquality_date),
+		"SELECT TO_CHAR(airquality_date, 'Month DD, YYYY'),
 		        measurement
 		   FROM CityInfo.AirQuality NATURAL JOIN CityInfo.Location
 		  WHERE city = '" . $_POST["city"] . "'
@@ -321,6 +321,89 @@ if(isset($_POST["city"]))
 
 	echo "The average number of property crimes is " . round($yearlyAvgProperty) . " per year.<br><br>";
 
+	pg_free_result($result);
+
+	$crimeDiffQuery =
+		"SELECT ten.violent_crimes,
+		        seventeen.violent_crimes,
+			seventeen.violent_crimes - ten.violent_crimes,
+		        ten.property_crimes,
+                        seventeen.property_crimes,
+			seventeen.property_crimes - ten.property_crimes,
+			tenpopulation.population,
+			seventeenpopulation.population
+		   FROM CityInfo.Crime ten,
+                        CityInfo.Crime seventeen,
+			CityInfo.Location,
+			CityInfo.CityPopulation tenpopulation,
+                        CityInfo.CityPopulation seventeenpopulation 
+		  WHERE ten.loc_id = location.loc_id
+                    AND seventeen.loc_id = location.loc_id 
+                    AND tenpopulation.loc_id = location.loc_id
+                    AND seventeenpopulation.loc_id = location.loc_id
+                    AND city = '" . $_POST["city"] . "'
+                    AND ten.year = '2010'
+                    AND tenpopulation.year = '2010'
+		    AND seventeen.year = '2017'
+                    AND seventeenpopulation.year = '2017';";
+
+        $result = pg_query($connection, $crimeDiffQuery);
+
+	$resultRow = pg_fetch_row($result);
+
+	$tenViolentCrimes = $resultRow[0];
+	$seventeenViolentCrimes = $resultRow[1];
+	$violentCrimeDiff = $resultRow[2];
+	$violentCrimePercentDiff = round($violentCrimeDiff / $tenViolentCrimes, 4) * 100;
+	$tenPropertyCrimes = $resultRow[3];
+	$seventeenPropertyCrimes = $resultRow[4];
+	$propertyCrimeDiff = $resultRow[5];
+	$propertyCrimePercentDiff = round($propertyCrimeDiff / $tenPropertyCrimes, 4) * 100;
+
+	$tenPopulation = $resultRow[6];
+	$seventeenPopulation = $resultRow[7];
+	$tenViolentCrimeRate = round(($tenViolentCrimes / $tenPopulation) * 100000, 1);
+	$tenPropertyCrimeRate = round(($tenPropertyCrimes / $tenPopulation) * 100000, 1);
+	$seventeenViolentCrimeRate = round(($seventeenViolentCrimes / $seventeenPopulation) * 100000, 1);
+	$seventeenPropertyCrimeRate = round(($seventeenPropertyCrimes / $seventeenPopulation) * 100000, 1);
+
+	echo "The number of violent crimes in 2010 was " . $tenViolentCrimes . "<br>";
+	echo "The violent crime rate per 100,000 people in 2010 was " . $tenViolentCrimeRate . ".<br><br>";
+	echo "The number of violent crimes in 2017 was " . $seventeenViolentCrimes . "<br>";
+	echo "The violent crime rate per 100,000 people in 2017 was " . $seventeenViolentCrimeRate . ".<br><br>";
+
+	echo "Violent crimes ";
+
+	if($violentCrimePercentDiff > 0)
+	{
+		echo "increased by ";
+	}		
+	else
+	{
+		echo "decreased by ";
+		$violentCrimePercentDiff = $violentCrimePercentDiff * -1;
+	}
+
+	echo $violentCrimePercentDiff . "% in this time period<br><br>";
+
+	echo "The number of property crimes in 2010 was " . $tenPropertyCrimes . "<br>";
+        echo "The property crime rate per 100,000 people in 2010 was " . $tenPropertyCrimeRate . ".<br><br>";
+	echo "The number of property crimes in 2017 was " . $seventeenPropertyCrimes . "<br>";
+        echo "The property crime rate per 100,000 people in 2017 was " . $seventeenPropertyCrimeRate . ".<br><br>";
+
+	echo "Property crimes ";
+
+	if($propertyCrimePercentDiff > 0)
+	{
+		echo "increased by ";
+	}
+	else
+	{
+		echo "decreased by ";
+		$propertyCrimePercentDiff = $propertyCrimePercentDiff * -1;
+	}
+
+	echo $propertyCrimePercentDiff . "% in this time period<br><br>";
 	pg_free_result($result);
 
 	//Home Price Data
